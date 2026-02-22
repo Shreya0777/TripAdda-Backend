@@ -9,6 +9,7 @@ app.use(express.json());
 app.use(cookiesparser());
 app.use('/',authRouter);
 
+
 connectDb().then(()=>{
     console.log("DB connected successfully");
     app.listen(5000,()=>{
