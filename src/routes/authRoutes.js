@@ -2,6 +2,7 @@ const express= require('express');
 const {validateSignup}= require('../utils/validator');
 const User = require('../models/user');
 const bcrypt= require('bcryptjs');
+const authMiddleware = require('../middleware/authMiddleware');
 
 const authRouter = express.Router();
 
@@ -39,8 +40,9 @@ authRouter.post("/login", async(req,res)=>{
         if(!user){
             throw new Error("Invalid email or password");
         }
-        const passwordMatch = await bcrypt.compare(password,user.password);
-        if(!passwordMatch){
+       
+    const isPasswordvalid = await user.validatePassword(password);
+        if(!isPasswordvalid){
             throw new Error("Invalid credentials");
         }
         const token = await user.getJWT();
@@ -51,6 +53,12 @@ authRouter.post("/login", async(req,res)=>{
     catch(err){
         res.status(400).send("ERROR:" + err.message);
     }
+})
+authRouter.post('/logout',(req,res)=>{
+  res.cookie("token", null,{
+  expires: new Date(Date.now())
+  })
+  res.send("Logout successfully");
 })
 
 module.exports = authRouter;
