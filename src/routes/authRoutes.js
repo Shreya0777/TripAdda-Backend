@@ -55,10 +55,23 @@ authRouter.post("/login", async(req,res)=>{
     }
 })
 authRouter.post('/logout',(req,res)=>{
-  res.cookie("token", null,{
+  res.cookie("token", null,{ 
   expires: new Date(Date.now())
   })
   res.send("Logout successfully");
+})
+authRouter.get('/users/profile/view', authMiddleware, async(req,res)=>{
+    try{
+        const user = req.user;
+        if(!user){
+            throw new Error("User not found");
+        }
+        console.log(user)
+        res.send(user);
+    }
+    catch(err){
+        res.status(400).send("ERROR:"+err.message);
+    }
 })
 
 module.exports = authRouter;

@@ -61,11 +61,12 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-userSchema.methods.getJWT = async function(){
+userSchema.methods.getJWT = function () {
     const user = this;
-    const token= jwt.sign({id: user._id},"Anjali@singh#123",{expiresIn: "2d"});
+    const secret = process.env.JWT_SECRET || 'Anjali@singh#123';
+    const token = jwt.sign({ id: user._id.toString() }, secret, { expiresIn: '2d' });
     return token;
-}
+};
 
 userSchema.methods.validatePassword = async function(passworduserInput){
     const user = this;
