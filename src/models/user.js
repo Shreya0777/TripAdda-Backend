@@ -42,6 +42,14 @@ const userSchema = new mongoose.Schema({
         type:Number,
         
     },
+     gender: {
+    type: String,
+    validate(value) {
+      if (!["Male", "Female", "other","male","female","Other"].includes(value)) {
+        throw new Error("Gender data is invalid");
+      }
+    },
+  },
     photoURL:{
         type: String,
         default: "https://tse2.mm.bing.net/th/id/OIP.9k6NZTQk5G6g5PVDDDeLiAHaHa?pid=Api&P=0&h=180",

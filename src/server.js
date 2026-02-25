@@ -4,10 +4,14 @@ const app=express();
 const User = require('./models/user');
 const cookiesparser = require('cookie-parser');
 const authRouter = require('./routes/authRoutes');
+const {usersRoute} = require('./routes/usersRoutes')
+const {TripRoutes} = require('./routes/TripRoutrs');
 
 app.use(express.json());
 app.use(cookiesparser());
 app.use('/',authRouter);
+app.use('/',usersRoute);
+app.use('/',TripRoutes);
 
 
 connectDb().then(()=>{
