@@ -68,7 +68,49 @@ TripRoutes.get("/trips/feed", AuthMiddleware, async (req, res) => {
     limit = limit > 25 ? 25 : limit;
     const skip = (page - 1) * limit;
 
-    const Trips = await Trip.find()
+    const{
+      destination,
+      minBudget,
+      maxBudget,
+      transportation,
+      minRating,
+      sortBy
+    } = req.query;
+    let filter={
+      userId:{$ne: req.user.id} //exclude the loggedin user
+    }
+    if(destination){
+      filter.destination={$regex:destination,$options:"i"};
+    }
+    if(minBudget||maxBudget){
+      filter.totalBudget={};
+      if(minBudget) filter.totalBudget.$gte=Number(minBudget);
+      if(maxBudget) filter.totalBudget.$lte=Number(maxBudget);
+    }
+    if(transportation){
+      filter.transportation = transportation;
+    }
+    if (minRating) {
+      filter.overallRating = { $gte: Number(minRating) };
+    }
+     // 🔹 Sorting logic
+    let sortOption = { createdAt: -1 }; // default newest
+
+    if (sortBy === "budget_low") {
+      sortOption = { totalBudget: 1 };
+    }
+
+    if (sortBy === "budget_high") {
+      sortOption = { totalBudget: -1 };
+    }
+
+    if (sortBy === "rating_high") {
+      sortOption = { overallRating: -1 };
+    }
+
+    const Trips = await Trip.find(
+      filter 
+    )
       .populate("userId", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -107,5 +149,61 @@ TripRoutes.get("/trips/:id", async (req, res) => {
     res.status(400).send("ERROR:" + err.message);
   }
 });
+TripRoutes.put("/trips/update/:id", AuthMiddleware,async(req,res)=>{
+  try{
+    const {id} =req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid trip ID" });
+    }
+    const trip= await Trip.findById(id);
+    if(!trip){
+      return res.status(404).json({message:"Trip Not found"});
+    }
+    if(trip.userId.toString()!==req.user.id){
+      return res.status(403).json({
+        message:"You are not authorized to update this trip"
+      });
+    }
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      id,
+      req.body,
+      {new: true}
+    );
+    res.status(200).json({
+      message:"Trip updated successfully",
+      updatedTrip
+    })
+  }
+  catch(err){
+    res.status(400).send("ERROR:"+ err.message);
+  }
+})
+TripRoutes.delete('/trips/delete/:id', AuthMiddleware, async(req,res)=>{
+  try{
+    const {id} = req.params;
+    if(!mongoose.Types.ObjectId.isValid(id)){
+      return res.status(400).json({message:"Invalid trip Id"});
+    }
+    const trip= await Trip.findById(id);
+
+    if(!trip){
+      return res.status(404).json({message:"Trip not found"});
+    }
+    if(trip.userId.toString()!==req.user.id){
+      return res.status(403).json({
+        message:"You are not authorized to delete this trip"
+      });
+    }
+    await Trip.findByIdAndDelete(id);
+    res.status(200).json({
+      message:" Trip deleted successfully"
+    });
+
+  }
+  catch(err){
+    res.status(400).send("ERROR:"+ err.message);
+  }
+})
 
 module.exports = { TripRoutes };
