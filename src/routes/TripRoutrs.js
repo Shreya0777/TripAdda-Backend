@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const User = require("../models/user");
 const Trip = require("../models/TripSchema");
 const AuthMiddleware = require("../middleware/authMiddleware");
+const validator = require("validator")
 
 const TripRoutes = express.Router();
 
@@ -12,51 +13,130 @@ TripRoutes.post("/trips", AuthMiddleware, async (req, res) => {
       from,
       destination,
       duration,
+      tripType,
+      bestTimeToVisit,
       totalBudget,
+      costPerPerson,
       transportation,
-      description,
+      localTravel,
+      hotelName,
       hotelRating,
-      overallRating,
-      media,
+      stayCost,
+      description,
+      tips,
       pros,
       cons,
+      overallRating,
+      tags,
+      media,
     } = req.body;
 
-    // Basic validation
-    if (!from || !destination || !totalBudget || !transportation) {
+    // Extract userId from auth middleware
+    const userId = req.user.id;
+
+    // Custom validation for business rules
+    if (!from || !destination || !duration || !totalBudget || !transportation || !overallRating) {
       return res.status(400).json({
-        message: "Required fields missing",
+        message: "Missing required fields: from, destination, duration, totalBudget, transportation, overallRating",
       });
     }
+
     if (from.toLowerCase() === destination.toLowerCase()) {
       return res.status(400).json({
-        message: "From and Destination cannot be same",
+        message: "From and destination cannot be the same",
       });
     }
 
-    const trip = await Trip.create({
-      userId: req.user.id,
-      from,
-      destination,
+    // Validate enums
+    const validTripTypes = ["solo", "friends", "family", "couple"];
+    const validTransports = ["train", "flight", "bus", "car", "other"];
+    if (tripType && !validTripTypes.includes(tripType)) {
+      return res.status(400).json({
+        message: `Invalid tripType. Must be one of: ${validTripTypes.join(", ")}`,
+      });
+    }
+    if (!validTransports.includes(transportation)) {
+      return res.status(400).json({
+        message: `Invalid transportation. Must be one of: ${validTransports.join(", ")}`,
+      });
+    }
+
+    // Validate media array structure (if provided)
+    if (media && !Array.isArray(media)) {
+      return res.status(400).json({ message: "media must be an array" });
+    }
+    if (media && media.some(item => !item.url || (item.type && !["image", "video"].includes(item.type)))) {
+      return res.status(400).json({ message: "Invalid media item: must have url and optional type (image/video)" });
+    }
+
+    // Use validator util (assuming it's Joi/express-validator) for structured input validation
+    // Example: validator.tripCreate(req.body) - customize based on your validator impl
+    const { error: validationError } = validator.tripCreate ? validator.tripCreate(req.body) : { error: null };
+    if (validationError) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: validationError.details || validationError,
+      });
+    }
+
+    // Create trip object matching schema exactly
+    const tripData = {
+      userId,
+      from: from.trim(),
+      destination: destination.trim(),
       duration,
+      tripType: tripType || "friends", // default from schema
+      bestTimeToVisit,
       totalBudget,
+      costPerPerson,
       transportation,
-      description,
+      localTravel,
+      hotelName,
       hotelRating,
-      overallRating,
-      media,
+      stayCost,
+      description,
+      tips,
       pros,
       cons,
-    });
+      overallRating,
+      tags: tags || [],
+      media: media || [],
+      // likes/saves auto-empty arrays from schema
+    };
+
+    const trip = await Trip.create(tripData);
 
     res.status(201).json({
-      message: "Trip Created Successfully",
+      message: "Trip created successfully",
       trip,
     });
   } catch (err) {
-    console.log(err);
+    console.error("Trip creation error:", err); // Better logging
+    // Mongoose validation errors are ValidationError
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid data provided",
+        errors: err.errors,
+      });
+    }
     res.status(500).json({
-      message: "Something went wrong",
+      message: "Internal server error",
+    });
+  }
+});
+
+TripRoutes.get("/trips/my-trips", AuthMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const trips = await Trip.find({ userId })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(trips);
+
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to fetch your trips"
     });
   }
 });

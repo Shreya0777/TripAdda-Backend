@@ -6,7 +6,16 @@ const cookiesparser = require('cookie-parser');
 const authRouter = require('./routes/authRoutes');
 const {usersRoute} = require('./routes/usersRoutes')
 const {TripRoutes} = require('./routes/TripRoutrs');
+const cors = require("cors");
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '1.1.1.1']);          // Google/Cloudflare
+dns.setDefaultResultOrder('ipv4first');
 
+
+app.use(cors({
+  origin: "http://localhost:5173", // frontend URL
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookiesparser());
 app.use('/',authRouter);
