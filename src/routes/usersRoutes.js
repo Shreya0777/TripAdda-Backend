@@ -18,4 +18,14 @@ usersRoute.patch("/users/profile/update", authMiddleware, async (req, res) => {
     res.status(400).send("Error:" + err.message);
   }
 });
+usersRoute.get("users/profile/view" , async (req, res) => {
+  try {
+    res.status(200).json(req.user);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching profile" });
+  }
+});
+
+
+
 module.exports={usersRoute}

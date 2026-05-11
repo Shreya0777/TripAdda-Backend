@@ -1,34 +1,57 @@
 const mongoose = require("mongoose");
-const express = require("express");
-const { validator } = require("../utils/validator");
 
 const TripSchema = new mongoose.Schema(
   {
+    // 👤 User
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
 
-    // 📍 Locations
-    from: {
+    // 📝 Basic Info
+    title: {
       type: String,
       required: true,
       trim: true,
-      minlength: 2,
-      maxlength: 50,
-    },
-    destination: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 2,
-      maxlength: 50,
+      maxlength: 100,
     },
 
-    // 📅 Trip Info
+    description: {
+      type: String,
+      required: true,
+      maxlength: 3000,
+    },
+
+    // 📍 Destination Info
+    destination: {
+      city: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      state: {
+        type: String,
+        trim: true,
+      },
+
+      country: {
+        type: String,
+        default: "India",
+      },
+    },
+
+    // 🚏 Boarding Point
+    boardingPoint: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    // 📅 Trip Details
     duration: {
-      type: Number, // better than string
+      type: Number,
       required: true,
       min: 1,
     },
@@ -43,68 +66,195 @@ const TripSchema = new mongoose.Schema(
       type: String,
     },
 
-    // 💰 Budget
-    totalBudget: {
-      type: Number,
-      required: true,
-      min: 0,
+    // 🚗 Transport Section
+    transportInfo: {
+      mode: {
+        type: String,
+        enum: ["train", "flight", "bus", "car", "bike", "other"],
+      },
+
+      transportName: {
+        type: String,
+      },
+
+      route: {
+        type: String,
+      },
+
+      duration: {
+        type: String,
+      },
+
+      fare: {
+        type: Number,
+      },
+
+      tips: [String],
     },
 
-    costPerPerson: {
-      type: Number,
+    // 💰 Budget Section
+    budgetDetails: {
+      totalBudget: {
+        type: Number,
+        required: true,
+      },
+
+      costPerPerson: {
+        type: Number,
+        required: true,
+      },
+
+      stayCost: {
+        type: Number,
+        default: 0,
+      },
+
+      foodCost: {
+        type: Number,
+        default: 0,
+      },
+
+      transportCost: {
+        type: Number,
+        default: 0,
+      },
+
+      sightseeingCost: {
+        type: Number,
+        default: 0,
+      },
+
+      otherCost: {
+        type: Number,
+        default: 0,
+      },
     },
 
-    // 🚗 Transport
-    transportation: {
-      type: String,
-      enum: ["train", "flight", "bus", "car", "other"],
-      required: true,
+    // 🏨 Stay Details
+    stayDetails: {
+      hotelName: {
+        type: String,
+      },
+
+      location: {
+        type: String,
+      },
+
+      pricePerNight: {
+        type: Number,
+      },
+
+      stayType: {
+        type: String,
+        enum: ["hotel", "hostel", "homestay", "resort", "airbnb"],
+      },
+
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      stayReview: {
+        type: String,
+      },
+
+      worthIt: {
+        type: Boolean,
+        default: true,
+      },
     },
 
-    localTravel: {
-      type: String, // cab, bike, auto etc.
+    // 🍜 Food Recommendations
+    foodRecommendations: {
+      mustTryFoods: [String],
+
+      cafes: [String],
+
+      budgetFoodOptions: [String],
     },
 
-    // 🏨 Stay
-    hotelName: {
-      type: String,
+    // 🌄 Hidden Spots
+    hiddenSpots: [
+      {
+        title: String,
+
+        description: String,
+
+        image: String,
+      },
+    ],
+
+    // 🗓 Itinerary
+    itinerary: {
+      itineraryType: {
+        type: String,
+        enum: ["text", "video"],
+        default: "text",
+      },
+
+      videoUrl: {
+        type: String,
+      },
+
+      days: [
+        {
+          day: Number,
+
+          title: String,
+
+          description: String,
+        },
+      ],
     },
 
-    hotelRating: {
-      type: Number,
-      min: 1,
-      max: 5,
-    },
-
-    stayCost: {
-      type: Number,
-    },
-
-    // 📝 Experience
-    description: {
-      type: String,
-      maxlength: 1000,
-    },
-
-    tips: {
-      type: String,
-      maxlength: 500,
-    },
-
-    pros: {
-      type: String,
-    },
-
-    cons: {
-      type: String,
-    },
+    // 💡 Traveler Tips
+    travelerTips: [String],
 
     // ⭐ Ratings
-    overallRating: {
-      type: Number,
-      min: 1,
-      max: 5,
-      required: true,
+    ratings: {
+      overall: {
+        type: Number,
+        min: 1,
+        max: 5,
+        required: true,
+      },
+
+      budget: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      safety: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      food: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      stay: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      transport: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
+
+      experience: {
+        type: Number,
+        min: 1,
+        max: 5,
+      },
     },
 
     // 🏷 Tags
@@ -123,6 +273,7 @@ const TripSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+
         type: {
           type: String,
           enum: ["image", "video"],
@@ -130,22 +281,8 @@ const TripSchema = new mongoose.Schema(
         },
       },
     ],
-
-    // 🔥 Future features (already ready)
-    likes: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-
-    saves: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
   },
+
   { timestamps: true }
 );
 

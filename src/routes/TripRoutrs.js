@@ -3,210 +3,413 @@ const mongoose = require("mongoose");
 const User = require("../models/user");
 const Trip = require("../models/TripSchema");
 const AuthMiddleware = require("../middleware/authMiddleware");
-const validator = require("validator")
+const validator = require("validator");
+const upload = require("../middleware/upload");
 
 const TripRoutes = express.Router();
 
-TripRoutes.post("/trips", AuthMiddleware, async (req, res) => {
-  try {
-    const {
-      from,
-      destination,
-      duration,
-      tripType,
-      bestTimeToVisit,
-      totalBudget,
-      costPerPerson,
-      transportation,
-      localTravel,
-      hotelName,
-      hotelRating,
-      stayCost,
-      description,
-      tips,
-      pros,
-      cons,
-      overallRating,
-      tags,
-      media,
-    } = req.body;
+TripRoutes.post(
+  "/trips",
+  AuthMiddleware,
+  upload.array("media", 10),
+  async (req, res) => {
+    try {
+      const {
+        title,
+        description,
 
-    // Extract userId from auth middleware
-    const userId = req.user.id;
+        // Destination
+        city,
+        state,
+        country,
 
-    // Custom validation for business rules
-    if (!from || !destination || !duration || !totalBudget || !transportation || !overallRating) {
-      return res.status(400).json({
-        message: "Missing required fields: from, destination, duration, totalBudget, transportation, overallRating",
+        // Boarding
+        boardingPoint,
+
+        // Trip
+        duration,
+        tripType,
+        bestTimeToVisit,
+
+        // Transport
+        transportMode,
+        transportName,
+        transportRoute,
+        transportDuration,
+        transportFare,
+        transportTips,
+
+        // Budget
+        totalBudget,
+        costPerPerson,
+        stayCost,
+        foodCost,
+        transportCost,
+        sightseeingCost,
+        otherCost,
+
+        // Stay
+        hotelName,
+        stayLocation,
+        pricePerNight,
+        stayType,
+        stayRating,
+        stayReview,
+        worthIt,
+
+        // Food
+        mustTryFoods,
+        cafes,
+        budgetFoodOptions,
+
+        // Hidden Spots
+        hiddenSpots,
+
+        // Itinerary
+        itineraryType,
+        itineraryVideoUrl,
+        itineraryDays,
+
+        // Tips
+        travelerTips,
+
+        // Ratings
+        overallRating,
+        budgetRating,
+        safetyRating,
+        foodRating,
+        stayRatingValue,
+        transportRating,
+        experienceRating,
+
+        // Tags
+        tags,
+      } = req.body;
+
+      const userId = req.user.id;
+
+      // Upload media
+      const uploadedMedia =
+        req.files?.map((file) => ({
+          url: file.path,
+          type: file.mimetype.startsWith("video")
+            ? "video"
+            : "image",
+        })) || [];
+
+      // Required validations
+      if (
+        !title ||
+        !description ||
+        !city ||
+        !boardingPoint ||
+        !duration ||
+        !totalBudget ||
+        !costPerPerson ||
+        !overallRating
+      ) {
+        return res.status(400).json({
+          message: "Missing required fields",
+        });
+      }
+
+      // Transport validation
+      const validTransports = [
+        "train",
+        "flight",
+        "bus",
+        "car",
+        "bike",
+        "other",
+      ];
+
+      if (
+        transportMode &&
+        !validTransports.includes(transportMode)
+      ) {
+        return res.status(400).json({
+          message: `Invalid transport mode`,
+        });
+      }
+
+      // Create trip object
+      const tripData = {
+        userId,
+
+        title: title.trim(),
+
+        description: description.trim(),
+
+        destination: {
+          city,
+          state,
+          country: country || "India",
+        },
+
+        boardingPoint,
+
+        duration,
+
+        tripType: tripType || "friends",
+
+        bestTimeToVisit,
+
+        transportInfo: {
+          mode: transportMode,
+          transportName,
+          route: transportRoute,
+          duration: transportDuration,
+          fare: transportFare,
+          tips: transportTips
+            ? JSON.parse(transportTips)
+            : [],
+        },
+
+        budgetDetails: {
+          totalBudget,
+          costPerPerson,
+          stayCost: stayCost || 0,
+          foodCost: foodCost || 0,
+          transportCost: transportCost || 0,
+          sightseeingCost: sightseeingCost || 0,
+          otherCost: otherCost || 0,
+        },
+
+        stayDetails: {
+          hotelName,
+          location: stayLocation,
+          pricePerNight,
+          stayType,
+          rating: stayRating,
+          stayReview,
+          worthIt,
+        },
+
+        foodRecommendations: {
+          mustTryFoods: mustTryFoods
+            ? JSON.parse(mustTryFoods)
+            : [],
+
+          cafes: cafes
+            ? JSON.parse(cafes)
+            : [],
+
+          budgetFoodOptions: budgetFoodOptions
+            ? JSON.parse(budgetFoodOptions)
+            : [],
+        },
+
+        hiddenSpots: hiddenSpots
+          ? JSON.parse(hiddenSpots)
+          : [],
+
+        itinerary: {
+          itineraryType: itineraryType || "text",
+
+          videoUrl: itineraryVideoUrl,
+
+          days: itineraryDays
+            ? JSON.parse(itineraryDays)
+            : [],
+        },
+
+        travelerTips: travelerTips
+          ? JSON.parse(travelerTips)
+          : [],
+
+        ratings: {
+          overall: overallRating,
+          budget: budgetRating,
+          safety: safetyRating,
+          food: foodRating,
+          stay: stayRatingValue,
+          transport: transportRating,
+          experience: experienceRating,
+        },
+
+        tags: tags ? JSON.parse(tags) : [],
+
+        media: uploadedMedia,
+      };
+
+      // Joi / custom validator
+      const { error: validationError } =
+        validator.tripCreate
+          ? validator.tripCreate(tripData)
+          : { error: null };
+
+      if (validationError) {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors:
+            validationError.details || validationError,
+        });
+      }
+
+      // Create trip
+      const trip = await Trip.create(tripData);
+
+      return res.status(201).json({
+        message: "Trip created successfully",
+        trip,
+      });
+    } catch (err) {
+      console.error("Trip creation error:", err);
+
+      if (err.name === "ValidationError") {
+        return res.status(400).json({
+          message: "Invalid data provided",
+          errors: err.errors,
+        });
+      }
+
+      return res.status(500).json({
+        message: "Internal server error",
       });
     }
-
-    if (from.toLowerCase() === destination.toLowerCase()) {
-      return res.status(400).json({
-        message: "From and destination cannot be the same",
-      });
-    }
-
-    // Validate enums
-    const validTripTypes = ["solo", "friends", "family", "couple"];
-    const validTransports = ["train", "flight", "bus", "car", "other"];
-    if (tripType && !validTripTypes.includes(tripType)) {
-      return res.status(400).json({
-        message: `Invalid tripType. Must be one of: ${validTripTypes.join(", ")}`,
-      });
-    }
-    if (!validTransports.includes(transportation)) {
-      return res.status(400).json({
-        message: `Invalid transportation. Must be one of: ${validTransports.join(", ")}`,
-      });
-    }
-
-    // Validate media array structure (if provided)
-    if (media && !Array.isArray(media)) {
-      return res.status(400).json({ message: "media must be an array" });
-    }
-    if (media && media.some(item => !item.url || (item.type && !["image", "video"].includes(item.type)))) {
-      return res.status(400).json({ message: "Invalid media item: must have url and optional type (image/video)" });
-    }
-
-    // Use validator util (assuming it's Joi/express-validator) for structured input validation
-    // Example: validator.tripCreate(req.body) - customize based on your validator impl
-    const { error: validationError } = validator.tripCreate ? validator.tripCreate(req.body) : { error: null };
-    if (validationError) {
-      return res.status(400).json({
-        message: "Validation failed",
-        errors: validationError.details || validationError,
-      });
-    }
-
-    // Create trip object matching schema exactly
-    const tripData = {
-      userId,
-      from: from.trim(),
-      destination: destination.trim(),
-      duration,
-      tripType: tripType || "friends", // default from schema
-      bestTimeToVisit,
-      totalBudget,
-      costPerPerson,
-      transportation,
-      localTravel,
-      hotelName,
-      hotelRating,
-      stayCost,
-      description,
-      tips,
-      pros,
-      cons,
-      overallRating,
-      tags: tags || [],
-      media: media || [],
-      // likes/saves auto-empty arrays from schema
-    };
-
-    const trip = await Trip.create(tripData);
-
-    res.status(201).json({
-      message: "Trip created successfully",
-      trip,
-    });
-  } catch (err) {
-    console.error("Trip creation error:", err); // Better logging
-    // Mongoose validation errors are ValidationError
-    if (err.name === "ValidationError") {
-      return res.status(400).json({
-        message: "Invalid data provided",
-        errors: err.errors,
-      });
-    }
-    res.status(500).json({
-      message: "Internal server error",
-    });
   }
-});
+);
 
 TripRoutes.get("/trips/my-trips", AuthMiddleware, async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const trips = await Trip.find({ userId })
-      .sort({ createdAt: -1 });
+    const trips = await Trip.find({ userId }).sort({ createdAt: -1 });
 
     res.status(200).json(trips);
-
   } catch (err) {
     res.status(500).json({
-      message: "Failed to fetch your trips"
+      message: "Failed to fetch your trips",
     });
   }
 });
 
 TripRoutes.get("/trips/feed", AuthMiddleware, async (req, res) => {
   try {
+    // Pagination
     const page = Math.max(parseInt(req.query.page) || 1, 1);
-    let limit = parseInt(req.query.limit) || 3;
+
+    let limit = parseInt(req.query.limit) || 6;
+
     limit = limit > 25 ? 25 : limit;
+
     const skip = (page - 1) * limit;
 
-    const{
+    // Query params
+    const {
       destination,
       minBudget,
       maxBudget,
-      transportation,
+      transportMode,
       minRating,
-      sortBy
+      tripType,
+      sortBy,
+      tag,
     } = req.query;
-    let filter={
-      userId:{$ne: req.user.id} //exclude the loggedin user
+
+    // Filters
+    let filter = {};
+
+    // Destination filter
+    if (destination) {
+      filter["destination.city"] = {
+        $regex: destination,
+        $options: "i",
+      };
     }
-    if(destination){
-      filter.destination={$regex:destination,$options:"i"};
+
+    // Budget filter
+    if (minBudget || maxBudget) {
+      filter["budgetDetails.costPerPerson"] = {};
+
+      if (minBudget) {
+        filter["budgetDetails.costPerPerson"].$gte =
+          Number(minBudget);
+      }
+
+      if (maxBudget) {
+        filter["budgetDetails.costPerPerson"].$lte =
+          Number(maxBudget);
+      }
     }
-    if(minBudget||maxBudget){
-      filter.totalBudget={};
-      if(minBudget) filter.totalBudget.$gte=Number(minBudget);
-      if(maxBudget) filter.totalBudget.$lte=Number(maxBudget);
+
+    // Transport filter
+    if (transportMode) {
+      filter["transportInfo.mode"] = transportMode;
     }
-    if(transportation){
-      filter.transportation = transportation;
-    }
+
+    // Rating filter
     if (minRating) {
-      filter.overallRating = { $gte: Number(minRating) };
+      filter["ratings.overall"] = {
+        $gte: Number(minRating),
+      };
     }
-     // 🔹 Sorting logic
-    let sortOption = { createdAt: -1 }; // default newest
+
+    // Trip type
+    if (tripType) {
+      filter.tripType = tripType;
+    }
+
+    // Tags filter
+    if (tag) {
+      filter.tags = {
+        $in: [tag.toLowerCase()],
+      };
+    }
+
+    // Sorting
+    let sortOption = {
+      createdAt: -1,
+    };
 
     if (sortBy === "budget_low") {
-      sortOption = { totalBudget: 1 };
+      sortOption = {
+        "budgetDetails.costPerPerson": 1,
+      };
     }
 
     if (sortBy === "budget_high") {
-      sortOption = { totalBudget: -1 };
+      sortOption = {
+        "budgetDetails.costPerPerson": -1,
+      };
     }
 
     if (sortBy === "rating_high") {
-      sortOption = { overallRating: -1 };
+      sortOption = {
+        "ratings.overall": -1,
+      };
     }
 
-    const Trips = await Trip.find(
-      filter 
-    )
-      .populate("userId", "name")
-      .sort({ createdAt: -1 })
+    // Fetch trips
+    const Trips = await Trip.find(filter)
+      .populate("userId", "name profilePhoto")
+      .sort(sortOption)
       .skip(skip)
       .limit(limit)
       .lean();
 
-    const totalTrips = await Trip.countDocuments();
+    // Total count
+    const totalTrips = await Trip.countDocuments(filter);
 
+    // Response
     res.status(200).json({
+      success: true,
+
       page,
+
       totalPages: Math.ceil(totalTrips / limit),
+
       totalTrips,
+
       Trips,
     });
   } catch (err) {
-    res.status(400).send("ERROR:" + err.message);
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 });
 TripRoutes.get("/trips/:id", async (req, res) => {
@@ -229,61 +432,56 @@ TripRoutes.get("/trips/:id", async (req, res) => {
     res.status(400).send("ERROR:" + err.message);
   }
 });
-TripRoutes.put("/trips/update/:id", AuthMiddleware,async(req,res)=>{
-  try{
-    const {id} =req.params;
+TripRoutes.put("/trips/update/:id", AuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({ message: "Invalid trip ID" });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid trip ID" });
     }
-    const trip= await Trip.findById(id);
-    if(!trip){
-      return res.status(404).json({message:"Trip Not found"});
+    const trip = await Trip.findById(id);
+    if (!trip) {
+      return res.status(404).json({ message: "Trip Not found" });
     }
-    if(trip.userId.toString()!==req.user.id){
+    if (trip.userId.toString() !== req.user.id) {
       return res.status(403).json({
-        message:"You are not authorized to update this trip"
+        message: "You are not authorized to update this trip",
       });
     }
-    const updatedTrip = await Trip.findByIdAndUpdate(
-      id,
-      req.body,
-      {new: true}
-    );
+    const updatedTrip = await Trip.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
     res.status(200).json({
-      message:"Trip updated successfully",
-      updatedTrip
-    })
+      message: "Trip updated successfully",
+      updatedTrip,
+    });
+  } catch (err) {
+    res.status(400).send("ERROR:" + err.message);
   }
-  catch(err){
-    res.status(400).send("ERROR:"+ err.message);
-  }
-})
-TripRoutes.delete('/trips/delete/:id', AuthMiddleware, async(req,res)=>{
-  try{
-    const {id} = req.params;
-    if(!mongoose.Types.ObjectId.isValid(id)){
-      return res.status(400).json({message:"Invalid trip Id"});
+});
+TripRoutes.delete("/trips/delete/:id", AuthMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid trip Id" });
     }
-    const trip= await Trip.findById(id);
+    const trip = await Trip.findById(id);
 
-    if(!trip){
-      return res.status(404).json({message:"Trip not found"});
+    if (!trip) {
+      return res.status(404).json({ message: "Trip not found" });
     }
-    if(trip.userId.toString()!==req.user.id){
+    if (trip.userId.toString() !== req.user.id) {
       return res.status(403).json({
-        message:"You are not authorized to delete this trip"
+        message: "You are not authorized to delete this trip",
       });
     }
     await Trip.findByIdAndDelete(id);
     res.status(200).json({
-      message:" Trip deleted successfully"
+      message: " Trip deleted successfully",
     });
-
+  } catch (err) {
+    res.status(400).send("ERROR:" + err.message);
   }
-  catch(err){
-    res.status(400).send("ERROR:"+ err.message);
-  }
-})
+});
 
 module.exports = { TripRoutes };
