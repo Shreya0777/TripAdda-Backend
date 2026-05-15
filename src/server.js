@@ -13,9 +13,11 @@ dns.setDefaultResultOrder('ipv4first');
 
 
 app.use(cors({
-  origin: "http://localhost:5174", // frontend URL
+  origin: "http://localhost:5173", // frontend URL
   credentials: true
 }));
+
+
 app.use(express.json());
 app.use(cookiesparser());
 app.use('/',authRouter);
