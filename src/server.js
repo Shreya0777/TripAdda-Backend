@@ -1,38 +1,53 @@
-const express = require('express');
-const connectDb = require('./config/db');
-const app=express();
 require("dotenv").config();
-const User = require('./models/user');
-const cookiesparser = require('cookie-parser');
-const authRouter = require('./routes/authRoutes');
-const {usersRoute} = require('./routes/usersRoutes')
-const {TripRoutes} = require('./routes/TripRoutrs');
+
+const express = require("express");
 const cors = require("cors");
-const dns = require('dns');
-const passport=require('passport');
-dns.setServers(['8.8.8.8', '1.1.1.1']);          // Google/Cloudflare
-dns.setDefaultResultOrder('ipv4first');
+const cookieParser = require("cookie-parser");
+const rateLimit=require("express-rate-limit");
+const passport = require("passport");
+const connectDb = require("./config/db");
+const dns = require("dns");
+const authRouter = require("./routes/authRoutes");
+const { usersRoute } = require("./routes/usersRoutes");
+const { TripRoutes } = require("./routes/TripRoutrs");
 
+const app = express();
 
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+dns.setDefaultResultOrder("ipv4first");
 
-app.use(cors({
-  origin: "http://localhost:5173", // frontend URL
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
-app.use(passport.initialize());
-app.use(express.json());
-app.use(cookiesparser());
-app.use('/',authRouter);
-app.use('/',usersRoute);
-app.use('/',TripRoutes);
-
-
-connectDb().then(()=>{
-    console.log("DB connected successfully");
-    app.listen(5000,()=>{
-        console.log("Server is running on port 5000");
-    })
-}).catch(()=>{
-    console.error("Database connection is failed");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests, please try again later.",
 });
+
+app.use(limiter);
+
+
+
+app.use(express.json());
+app.use(cookieParser());
+app.use(passport.initialize());
+
+app.use("/", authRouter);
+app.use("/", usersRoute);
+app.use("/", TripRoutes);
+
+connectDb()
+  .then(() => {
+    console.log("DB connected successfully");
+    app.listen(5000, () => {
+      console.log("Server is running on port 5000");
+    });
+  })
+  .catch(() => {
+    console.error("Database connection is failed");
+  });

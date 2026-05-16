@@ -13,7 +13,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "http://localhost:5000/auth/google/callback",
+      callbackURL: "http://localhost:5000/google/callback",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -23,6 +23,7 @@ passport.use(
 
         if (!user) {
           user = new User({
+            googleId: profile.id,
             name: profile.displayName,
             username: email.split("@")[0],
             email,
@@ -65,7 +66,8 @@ authRouter.get(
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.redirect("http://localhost:5173/");
+    res.redirect("http://localhost:5173/auth/success");
+    
   }
 );
 

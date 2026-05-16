@@ -286,4 +286,16 @@ const TripSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ⚡ INDEXES
+
+TripSchema.index({ userId: 1, createdAt: -1 });
+
+TripSchema.index({ "destination.city": 1 });
+
+TripSchema.index({ tags: 1 });
+
+TripSchema.index({ "ratings.overall": -1 });
+
+TripSchema.index({ "budgetDetails.totalBudget": 1 });
+
 module.exports = mongoose.model("Trip", TripSchema);

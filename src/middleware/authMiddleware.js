@@ -9,7 +9,7 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).send('Unauthorized: No token provided');
         }
 
-        const secret = process.env.JWT_SECRET || 'Anjali@singh#123';
+        const secret = process.env.JWT_SECRET ;
         let decoded;
         try {
             decoded = jwt.verify(token, secret);
@@ -18,7 +18,7 @@ const authMiddleware = async (req, res, next) => {
             return res.status(401).send('ERROR: invalid token - ' + verifyErr.message);
         }
 
-        console.log('authMiddleware: token present, decoded payload =', decoded);
+    
 
         const userId = decoded.id || decoded._id || decoded.userId;
         if (!userId) {
@@ -27,7 +27,7 @@ const authMiddleware = async (req, res, next) => {
         }
 
         const user = await User.findById(userId);
-        console.log('authMiddleware: findById(', userId, ') ->', !!user);
+        c
 
         if (!user) {
             return res.status(404).send('User not found');
