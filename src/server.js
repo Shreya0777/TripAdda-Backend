@@ -17,7 +17,7 @@ dns.setDefaultResultOrder("ipv4first");
 
 app.use(
   cors({
-    origin: true,
+    origin: "https://trip-adda-frontend.vercel.app",
     credentials: true,
   })
 );
