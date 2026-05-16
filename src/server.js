@@ -1,5 +1,4 @@
 require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -18,7 +17,7 @@ dns.setDefaultResultOrder("ipv4first");
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: true,
     credentials: true,
   })
 );
@@ -44,10 +43,13 @@ app.use("/", TripRoutes);
 connectDb()
   .then(() => {
     console.log("DB connected successfully");
-    app.listen(5000, () => {
-      console.log("Server is running on port 5000");
+
+    const PORT = process.env.PORT || 5000;
+
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
     });
   })
-  .catch(() => {
-    console.error("Database connection is failed");
+  .catch((err) => {
+    console.error("Database connection failed:", err);
   });

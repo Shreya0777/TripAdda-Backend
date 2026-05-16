@@ -1,7 +1,8 @@
 const mongoose= require('mongoose');
+require("dotenv").config();
 
 const connectDb= async()=>{
-    await mongoose.connect("mongodb+srv://singhsshreya297_db_user:GnxPpcUi4yX9zgry@triptrail-dev.6mjibbr.mongodb.net/triptraildb");
+    await mongoose.connect(process.env.MONGO_URI);
 
 }
 
