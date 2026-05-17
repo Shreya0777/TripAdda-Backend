@@ -13,7 +13,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "http://localhost:5000/google/callback",
+       callbackURL: process.env.GOOGLE_CALLBACK_URL,,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -54,7 +54,7 @@ authRouter.get(
   "/google/callback",
   passport.authenticate("google", {
     session: false,
-    failureRedirect: "http://localhost:5173/login",
+    failureRedirect: "https://trip-adda-frontend.vercel.app/login",
   }),
   async (req, res) => {
     const token = await req.user.getJWT();
@@ -66,7 +66,7 @@ authRouter.get(
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.redirect("http://localhost:5173/auth/success");
+    res.redirect("https://trip-adda-frontend.vercel.app/auth/success");
     
   }
 );
@@ -133,13 +133,17 @@ authRouter.post("/login", async (req, res) => {
     const token = await user.getJWT();
 
     res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      secure: false,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+  httpOnly: true,
+  sameSite: "none",
+  secure: true,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+});
 
-    res.send("Login successful");
+    res.status(200).json({
+  message: "Login successful",
+  token,
+  user,
+});
   } catch (err) {
     res.status(400).send("ERROR:" + err.message);
   }
