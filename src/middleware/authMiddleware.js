@@ -20,13 +20,7 @@ const authMiddleware = async (req, res, next) => {
 
     
 
-        const userId = decoded.id || decoded._id || decoded.userId;
-        if (!userId) {
-            console.error('authMiddleware: no user id in token payload');
-            return res.status(401).send('ERROR: no user id in token');
-        }
-
-        const user = await User.findById(userId);
+        const user = await User.findById(decoded.id);
         
 
         if (!user) {

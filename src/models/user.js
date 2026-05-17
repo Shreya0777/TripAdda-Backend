@@ -79,12 +79,15 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-userSchema.methods.getJWT = function () {
+userSchema.methods.getJWT = async function () {
   const user = this;
-  const secret = process.env.JWT_SECRET || "Anjali@singh#123";
-  const token = jwt.sign({ id: user._id.toString() }, secret, {
-    expiresIn: "2d",
-  });
+
+  const token = jwt.sign(
+    { id: user._id },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
   return token;
 };
 
