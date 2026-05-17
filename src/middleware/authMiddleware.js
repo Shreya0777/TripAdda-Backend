@@ -27,7 +27,7 @@ const authMiddleware = async (req, res, next) => {
         }
 
         const user = await User.findById(userId);
-        c
+        
 
         if (!user) {
             return res.status(404).send('User not found');
