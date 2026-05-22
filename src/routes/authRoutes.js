@@ -150,11 +150,23 @@ authRouter.post("/login", async (req, res) => {
 });
 
 authRouter.post("/logout", (req, res) => {
-  res.cookie("token", null, {
-    expires: new Date(Date.now()),
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    path: "/",
   });
 
-  res.send("Logout successfully");
+  res.clearCookie("connect.sid", {
+    secure: true,
+    sameSite: "none",
+    path: "/",
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "Logout successfully",
+  });
 });
 
 authRouter.get("/users/profile/view", authMiddleware, async (req, res) => {
