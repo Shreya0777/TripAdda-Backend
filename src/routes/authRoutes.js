@@ -55,7 +55,7 @@ passport.use(
 );
 
 authRouter.get(
-  "/google",
+  "/auth/google",
   passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
