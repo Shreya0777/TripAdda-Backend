@@ -484,4 +484,18 @@ TripRoutes.delete("/trips/delete/:id", AuthMiddleware, async (req, res) => {
   }
 });
 
+TripRoutes.get("/trips/user/:id", AuthMiddleware, async (req, res) => {
+  try {
+    const trips = await Trip.find({ userId: req.params.id })
+      .populate("userId", "name username photoURL")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(trips);
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to fetch user trips",
+    });
+  }
+});
+
 module.exports = { TripRoutes };
