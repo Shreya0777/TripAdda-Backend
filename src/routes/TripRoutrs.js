@@ -382,7 +382,7 @@ TripRoutes.get("/trips/feed", AuthMiddleware, async (req, res) => {
 
     // Fetch trips
     const Trips = await Trip.find(filter)
-      .populate("userId", "name profilePhoto")
+      .populate("userId", "name username photoURL")
       .sort(sortOption)
       .skip(skip)
       .limit(limit)
@@ -420,7 +420,7 @@ TripRoutes.get("/trips/:id", async (req, res) => {
         message: "Invalid trip ID",
       });
     }
-    const trip = await Trip.findById(id).populate("userId", "name email");
+    const trip = await Trip.findById(id).populate("userId", "name username photoURL About");
 
     if (!trip) {
       return res.status(404).json({

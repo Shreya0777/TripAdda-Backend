@@ -7,14 +7,24 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const authMiddleware = require("../middleware/authMiddleware");
 
 const authRouter = express.Router();
-
+const cookieOptions = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+//to continue with google option
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
+      callbackURL: process.env.GOOGLE_CALLBACK_URL|| "http://localhost:5000/auth/google/callback",
+      
     },
+    
+    
     async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
@@ -38,7 +48,9 @@ passport.use(
       } catch (err) {
         return done(err, null);
       }
+      
     }
+    
   )
 );
 
@@ -51,7 +63,7 @@ authRouter.get(
 );
 
 authRouter.get(
-  "/google/callback",
+  "/auth/google/callback",
   passport.authenticate("google", {
     session: false,
     failureRedirect: "https://trip-adda-frontend.vercel.app/login",
@@ -59,12 +71,7 @@ authRouter.get(
   async (req, res) => {
     const token = await req.user.getJWT();
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      secure: false,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, cookieOptions);
 
     res.redirect("https://trip-adda-frontend.vercel.app/auth/success");
     
@@ -101,12 +108,7 @@ authRouter.post("/signup", async (req, res) => {
 
     const token = await user.getJWT();
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: "Lax",
-      secure: false,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, cookieOptions);
 
     res.send("user created successfully");
   } catch (err) {
@@ -132,12 +134,9 @@ authRouter.post("/login", async (req, res) => {
 
     const token = await user.getJWT();
 
-    res.cookie("token", token, {
-  httpOnly: true,
-  sameSite: "none",
-  secure: true,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-});
+    res.cookie("token", token, cookieOptions);
+
+
 
     res.status(200).json({
   message: "Login successful",
@@ -169,15 +168,36 @@ authRouter.post("/logout", (req, res) => {
   });
 });
 
+
+
 authRouter.get("/users/profile/view", authMiddleware, async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store");
+
     const user = req.user;
 
     if (!user) {
       throw new Error("User not found");
     }
 
-    res.send(user);
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(400).send("ERROR:" + err.message);
+  }
+});
+authRouter.get("/users/profile/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select(
+      "name username photoURL About createdAt"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    res.status(200).json(user);
   } catch (err) {
     res.status(400).send("ERROR:" + err.message);
   }
