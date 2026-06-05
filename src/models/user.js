@@ -69,6 +69,12 @@ const userSchema = new mongoose.Schema(
         }
       },
     },
+    loginOtp: {
+      type: String,
+    },
+    loginOtpExpires: {
+      type: Date,
+    },
     About: {
       type: String,
       default: "Hey there! I'm using Trip_Trail",
@@ -82,11 +88,9 @@ const userSchema = new mongoose.Schema(
 userSchema.methods.getJWT = async function () {
   const user = this;
 
-  const token = jwt.sign(
-    { id: user._id },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
+  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 
   return token;
 };

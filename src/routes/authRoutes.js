@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const authMiddleware = require("../middleware/authMiddleware");
+const sendEmail = require("../utils/sendEmail");
 
 const authRouter = express.Router();
 const cookieOptions = {
@@ -14,6 +15,7 @@ const cookieOptions = {
   path: "/",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
+
 //to continue with google option
 passport.use(
   new GoogleStrategy(
@@ -21,10 +23,8 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
-      
     },
-    
-    
+
     async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
@@ -48,10 +48,8 @@ passport.use(
       } catch (err) {
         return done(err, null);
       }
-      
-    }
-    
-  )
+    },
+  ),
 );
 
 authRouter.get(
@@ -59,7 +57,7 @@ authRouter.get(
   passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
-  })
+  }),
 );
 
 authRouter.get(
@@ -74,9 +72,24 @@ authRouter.get(
     res.cookie("token", token, cookieOptions);
 
     res.redirect("https://trip-adda-frontend.vercel.app/auth/success");
-    
-  }
+  },
 );
+
+authRouter.get("/check-username/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    const existingUser = await User.findOne({ username });
+
+    res.status(200).json({
+      available: !existingUser,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
 
 authRouter.post("/signup", async (req, res) => {
   try {
@@ -84,13 +97,6 @@ authRouter.post("/signup", async (req, res) => {
 
     const { name, username, email, password, age, photoURL, About } = req.body;
 
-    const existingUser = await User.findOne({ email });
-
-    if (existingUser) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
-    }
 
     const passwordhash = await bcrypt.hash(password, 10);
 
@@ -116,6 +122,8 @@ authRouter.post("/signup", async (req, res) => {
   }
 });
 
+
+
 authRouter.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -132,20 +140,57 @@ authRouter.post("/login", async (req, res) => {
       throw new Error("Invalid credentials");
     }
 
-    const token = await user.getJWT();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    res.cookie("token", token, cookieOptions);
+    user.loginOtp = otp;
+    user.loginOtpExpires = Date.now() + 5 * 60 * 1000;
 
+    await user.save();
 
+    await sendEmail({
+      to: user.email,
+      subject: "Your TripAdda Login OTP",
+      text: `Your TripAdda login OTP is ${otp}. It is valid for 5 minutes.`,
+    });
 
     res.status(200).json({
-  message: "Login successful",
-  token,
-  user,
-});
+      success: true,
+      message: "OTP sent successfully",
+      email: user.email,
+    });
   } catch (err) {
     res.status(400).send("ERROR:" + err.message);
   }
+});
+authRouter.post("/verify-login-otp", async (req, res) => {
+  const { email, otp } = req.body;
+
+  const user = await User.findOne({
+    email,
+    loginOtp: otp,
+    loginOtpExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return res.status(400).json({
+      message: "Invalid OTP",
+    });
+  }
+
+  user.loginOtp = undefined;
+  user.loginOtpExpires = undefined;
+
+  await user.save();
+
+  const token = await user.getJWT();
+
+  res.cookie("token", token, cookieOptions);
+
+  res.status(200).json({
+    success: true,
+    message: "Login successful",
+    user,
+  });
 });
 
 authRouter.post("/logout", (req, res) => {
@@ -168,8 +213,6 @@ authRouter.post("/logout", (req, res) => {
   });
 });
 
-
-
 authRouter.get("/users/profile/view", authMiddleware, async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store");
@@ -188,7 +231,7 @@ authRouter.get("/users/profile/view", authMiddleware, async (req, res) => {
 authRouter.get("/users/profile/:id", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
-      "name username photoURL About createdAt"
+      "name username photoURL About createdAt",
     );
 
     if (!user) {
