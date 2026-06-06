@@ -97,13 +97,33 @@ authRouter.post("/signup", async (req, res) => {
 
     const { name, username, email, password, age, photoURL, About } = req.body;
 
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = username.toLowerCase().trim();
+
+    const existingEmail = await User.findOne({ email: normalizedEmail });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        message: "User already exists. Please login.",
+      });
+    }
+
+    const existingUsername = await User.findOne({
+      username: normalizedUsername,
+    });
+
+    if (existingUsername) {
+      return res.status(400).json({
+        message: "Username already exists",
+      });
+    }
 
     const passwordhash = await bcrypt.hash(password, 10);
 
     const user = new User({
       name,
-      username,
-      email,
+      username: normalizedUsername,
+      email: normalizedEmail,
       password: passwordhash,
       age,
       photoURL,
@@ -116,13 +136,29 @@ authRouter.post("/signup", async (req, res) => {
 
     res.cookie("token", token, cookieOptions);
 
-    res.send("user created successfully");
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      user,
+      token,
+    });
   } catch (err) {
-    res.status(400).send("ERROR:" + err.message);
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0];
+
+      return res.status(400).json({
+        message:
+          field === "email"
+            ? "User already exists. Please login."
+            : "Username already exists",
+      });
+    }
+
+    res.status(400).json({
+      message: err.message || "Signup failed",
+    });
   }
 });
-
-
 
 authRouter.post("/login", async (req, res) => {
   try {
