@@ -19,6 +19,7 @@ app.set("trust proxy", 1);
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 dns.setDefaultResultOrder("ipv4first");
 
+
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
