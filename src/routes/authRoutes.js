@@ -162,19 +162,36 @@ authRouter.post("/signup", async (req, res) => {
 
 authRouter.post("/login", async (req, res) => {
   try {
+    console.log("Login started");
+
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (!user) {
-      throw new Error("Invalid email or password");
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
 
-    const isPasswordvalid = await user.validatePassword(password);
+    const isPasswordValid = await user.validatePassword(password);
 
-    if (!isPasswordvalid) {
-      throw new Error("Invalid credentials");
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email or password",
+      });
     }
+
+    console.log("Password verified");
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -183,50 +200,71 @@ authRouter.post("/login", async (req, res) => {
 
     await user.save();
 
-    await sendEmail({
-      to: user.email,
-      subject: "Your TripAdda Login OTP",
-      text: `Your TripAdda login OTP is ${otp}. It is valid for 5 minutes.`,
-    });
+    console.log("OTP generated:", otp);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "OTP sent successfully",
+      message: "OTP generated successfully",
       email: user.email,
+      otp: otp, // testing only
     });
   } catch (err) {
-    res.status(400).send("ERROR:" + err.message);
+    console.error("Login error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Login failed",
+      error: err.message,
+    });
   }
 });
 authRouter.post("/verify-login-otp", async (req, res) => {
-  const { email, otp } = req.body;
+  try {
+    const { email, otp } = req.body;
 
-  const user = await User.findOne({
-    email,
-    loginOtp: otp,
-    loginOtpExpires: { $gt: Date.now() },
-  });
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
 
-  if (!user) {
-    return res.status(400).json({
-      message: "Invalid OTP",
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      loginOtp: otp.toString().trim(),
+      loginOtpExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    user.loginOtp = undefined;
+    user.loginOtpExpires = undefined;
+
+    await user.save();
+
+    const token = await user.getJWT();
+
+    res.cookie("token", token, cookieOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user,
+    });
+  } catch (err) {
+    console.error("OTP verify error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "OTP verification failed",
+      error: err.message,
     });
   }
-
-  user.loginOtp = undefined;
-  user.loginOtpExpires = undefined;
-
-  await user.save();
-
-  const token = await user.getJWT();
-
-  res.cookie("token", token, cookieOptions);
-
-  res.status(200).json({
-    success: true,
-    message: "Login successful",
-    user,
-  });
 });
 
 authRouter.post("/logout", (req, res) => {

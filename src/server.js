@@ -52,16 +52,14 @@ app.use("/", authRouter);
 app.use("/", usersRoute);
 app.use("/", TripRoutes);
 
+
+
 connectDb()
   .then(() => {
-    console.log("DB connected successfully");
-
-    const PORT = process.env.PORT || 5000;
-
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+    app.listen(process.env.PORT || 5000, () => {
+      console.log("Server is running");
     });
   })
   .catch((err) => {
-    console.error("Database connection failed:", err);
+    console.log("Database connection error:", err);
   });
