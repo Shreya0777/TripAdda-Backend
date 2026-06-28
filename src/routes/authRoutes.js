@@ -199,6 +199,13 @@ authRouter.post("/login", async (req, res) => {
     user.loginOtpExpires = Date.now() + 5 * 60 * 1000;
 
     await user.save();
+    await sendEmail({
+  to: user.email,
+  subject: "Your TripAdda Login OTP",
+  text: `Your TripAdda login OTP is ${otp}. It is valid for 5 minutes.`,
+});
+
+console.log("Email sent");
 
     console.log("OTP generated:", otp);
 
@@ -206,7 +213,7 @@ authRouter.post("/login", async (req, res) => {
       success: true,
       message: "OTP generated successfully",
       email: user.email,
-      otp: otp, // testing only
+      otp
     });
   } catch (err) {
     console.error("Login error:", err);
