@@ -1,28 +1,21 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  family: 4,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async ({ to, subject, text }) => {
-  const info = await transporter.sendMail({
-    from: `"TripAdda" <${process.env.EMAIL_USER}>`,
+  const { data, error } = await resend.emails.send({
+    from: "TripAdda <onboarding@resend.dev>",
     to,
     subject,
     text,
   });
 
-  console.log("Email sent:", info.messageId);
+  if (error) {
+    console.error("Resend Error:", error);
+    throw new Error(error.message);
+  }
+
+  console.log("Email sent:", data);
 };
 
 module.exports = sendEmail;
