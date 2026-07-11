@@ -75,6 +75,13 @@ const userSchema = new mongoose.Schema(
     loginOtpExpires: {
       type: Date,
     },
+    resetOtp: {
+      type: String,
+    },
+
+    resetOtpExpires: {
+      type: Date,
+    },
     About: {
       type: String,
       default: "Hey there! I'm using Trip_Trail",

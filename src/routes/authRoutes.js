@@ -200,12 +200,22 @@ authRouter.post("/login", async (req, res) => {
 
     await user.save();
     await sendEmail({
-  to: user.email,
-  subject: "Your TripAdda Login OTP",
-  text: `Your TripAdda login OTP is ${otp}. It is valid for 5 minutes.`,
-});
+      to: user.email,
+      subject: "TripAdda Login Verification Code",
+      text: `Hi,
 
-console.log("Email sent");
+Your TripAdda verification code is:
+
+${otp}
+
+This OTP is valid for 5 minutes.
+
+If you didn't request this login, you can safely ignore this email.
+
+- Team TripAdda`,
+    });
+
+    console.log("Email sent");
 
     console.log("OTP generated:", otp);
 
@@ -213,7 +223,7 @@ console.log("Email sent");
       success: true,
       message: "OTP generated successfully",
       email: user.email,
-      otp
+      otp,
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -271,6 +281,93 @@ authRouter.post("/verify-login-otp", async (req, res) => {
       message: "OTP verification failed",
       error: err.message,
     });
+  }
+});
+authRouter.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const otp = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    user.resetOtp = otp;
+    user.resetOtpExpires = Date.now() + 5 * 60 * 1000;
+
+    await user.save();
+
+    await sendEmail({
+      to: user.email,
+      subject: "Reset Password OTP",
+      text: `Your OTP is ${otp}`,
+    });
+
+    res.json({
+      success: true,
+      message: "OTP Sent",
+      email: user.email,
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
+authRouter.post("/reset-password", async (req, res) => {
+  try {
+
+    const {
+      email,
+      otp,
+      password,
+    } = req.body;
+
+    const user = await User.findOne({
+      email,
+      resetOtp: otp,
+      resetOtpExpires: {
+        $gt: Date.now(),
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid OTP",
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    user.password = hash;
+
+    user.resetOtp = undefined;
+    user.resetOtpExpires = undefined;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Password Updated",
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      message: err.message,
+    });
+
   }
 });
 
