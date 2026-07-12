@@ -4,7 +4,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async ({ to, subject, text }) => {
   const { data, error } = await resend.emails.send({
-    from: "TripAdda <tripadda.official@gmail.com>", // ya verified domain
+    from: "TripAdda <onboarding@resend.dev>", // ya verified domain
     to,
     subject,
     text,
