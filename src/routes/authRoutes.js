@@ -223,7 +223,7 @@ If you didn't request this login, you can safely ignore this email.
       success: true,
       message: "OTP generated successfully",
       email: user.email,
-      otp,
+      
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -283,6 +283,34 @@ authRouter.post("/verify-login-otp", async (req, res) => {
     });
   }
 });
+authRouter.post("/verify-reset-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetOtp: otp,
+      resetOtpExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "OTP verified",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
 authRouter.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -297,9 +325,7 @@ authRouter.post("/forgot-password", async (req, res) => {
       });
     }
 
-    const otp = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     user.resetOtp = otp;
     user.resetOtpExpires = Date.now() + 5 * 60 * 1000;
@@ -309,7 +335,19 @@ authRouter.post("/forgot-password", async (req, res) => {
     await sendEmail({
       to: user.email,
       subject: "Reset Password OTP",
-      text: `Your OTP is ${otp}`,
+      text: `
+Hi,
+
+Your TripAdda password reset OTP is
+
+${otp}
+
+This OTP will expire in 5 minutes.
+
+If you didn't request this, simply ignore this email.
+
+- Team TripAdda
+`,
     });
 
     res.json({
@@ -317,7 +355,43 @@ authRouter.post("/forgot-password", async (req, res) => {
       message: "OTP Sent",
       email: user.email,
     });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+authRouter.post("/resend-login-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
 
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.loginOtp = otp;
+    user.loginOtpExpires = Date.now() + 5 * 60 * 1000;
+
+    await user.save();
+
+    await sendEmail({
+      to: user.email,
+      subject: "TripAdda Login Verification Code",
+      text: `Your OTP is ${otp}`,
+    });
+
+    res.json({
+      success: true,
+      message: "OTP Sent",
+    });
   } catch (err) {
     res.status(500).json({
       message: err.message,
@@ -327,12 +401,7 @@ authRouter.post("/forgot-password", async (req, res) => {
 
 authRouter.post("/reset-password", async (req, res) => {
   try {
-
-    const {
-      email,
-      otp,
-      password,
-    } = req.body;
+    const { email, otp, password } = req.body;
 
     const user = await User.findOne({
       email,
@@ -361,13 +430,10 @@ authRouter.post("/reset-password", async (req, res) => {
       success: true,
       message: "Password Updated",
     });
-
   } catch (err) {
-
     res.status(500).json({
       message: err.message,
     });
-
   }
 });
 
