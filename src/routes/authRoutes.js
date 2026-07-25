@@ -1,13 +1,20 @@
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const { validateSignup } = require("../utils/validator");
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
+// FIX: the Google strategy is registered once, in config/Passport.js
+// (make sure server.js does `require("./config/Passport")` before this
+// router is mounted). It was previously defined a second time here with
+// slightly different fallback logic (different default `About` text,
+// no googleId backfill on existing accounts) — a classic "which copy is
+// actually running" bug.
 const authMiddleware = require("../middleware/authMiddleware");
 const sendEmail = require("../utils/sendEmail");
 
 const authRouter = express.Router();
+
 const cookieOptions = {
   httpOnly: true,
   secure: true,
@@ -16,78 +23,50 @@ const cookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-//to continue with google option
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    },
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || "https://trip-adda-frontend.vercel.app";
 
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        const email = profile.emails?.[0]?.value;
+// FIX: OTP endpoints are brute-forceable 6-digit codes — give them a much
+// tighter, dedicated limiter instead of relying only on the global
+// 100-req/15min limit in server.js.
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: "Too many attempts, please try again later." },
+});
 
-        let user = await User.findOne({ email });
+// FIX: single helper instead of the same 4 lines duplicated 3x across
+// login / forgot-password / resend-otp.
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
-        if (!user) {
-          user = new User({
-            googleId: profile.id,
-            name: profile.displayName,
-            username: email.split("@")[0],
-            email,
-            photoURL: profile.photos?.[0]?.value,
-            About: "Hey there! I'm using HelloTrips",
-          });
-
-          await user.save();
-        }
-
-        return done(null, user);
-      } catch (err) {
-        return done(err, null);
-      }
-    },
-  ),
-);
+const OTP_TTL_MS = 5 * 60 * 1000;
 
 authRouter.get(
   "/auth/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    session: false,
-  }),
+  passport.authenticate("google", { scope: ["profile", "email"], session: false }),
 );
 
 authRouter.get(
   "/auth/google/callback",
   passport.authenticate("google", {
     session: false,
-    failureRedirect: "https://trip-adda-frontend.vercel.app/login",
+    failureRedirect: `${FRONTEND_URL}/login`,
   }),
   async (req, res) => {
-    const token = await req.user.getJWT();
-
+    const token = req.user.getJWT();
     res.cookie("token", token, cookieOptions);
-
-    res.redirect("https://trip-adda-frontend.vercel.app/auth/success");
+    res.redirect(`${FRONTEND_URL}/auth/success`);
   },
 );
 
 authRouter.get("/check-username/:username", async (req, res) => {
   try {
-    const { username } = req.params;
-
-    const existingUser = await User.findOne({ username });
-
-    res.status(200).json({
-      available: !existingUser,
-    });
+    const username = req.params.username.toLowerCase().trim();
+    const existingUser = await User.findOne({ username }).select("_id");
+    res.status(200).json({ available: !existingUser });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -96,56 +75,17 @@ authRouter.post("/signup", async (req, res) => {
     validateSignup(req);
 
     const { name, username, email, password, age, photoURL, About } = req.body;
-
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedUsername = username.toLowerCase().trim();
 
-    const existingEmail = await User.findOne({ email: normalizedEmail });
+    // FIX: two round trips replaced with one query checking both fields;
+    // still tells the client which one collided.
+    const existing = await User.findOne({
+      $or: [{ email: normalizedEmail }, { username: normalizedUsername }],
+    }).select("email username");
 
-    if (existingEmail) {
-      return res.status(400).json({
-        message: "User already exists. Please login.",
-      });
-    }
-
-    const existingUsername = await User.findOne({
-      username: normalizedUsername,
-    });
-
-    if (existingUsername) {
-      return res.status(400).json({
-        message: "Username already exists",
-      });
-    }
-
-    const passwordhash = await bcrypt.hash(password, 10);
-
-    const user = new User({
-      name,
-      username: normalizedUsername,
-      email: normalizedEmail,
-      password: passwordhash,
-      age,
-      photoURL,
-      About,
-    });
-
-    await user.save();
-
-    const token = await user.getJWT();
-
-    res.cookie("token", token, cookieOptions);
-
-    res.status(201).json({
-      success: true,
-      message: "User created successfully",
-      user,
-      token,
-    });
-  } catch (err) {
-    if (err.code === 11000) {
-      const field = Object.keys(err.keyPattern || {})[0];
-
+    if (existing) {
+      const field = existing.email === normalizedEmail ? "email" : "username";
       return res.status(400).json({
         message:
           field === "email"
@@ -154,96 +94,89 @@ authRouter.post("/signup", async (req, res) => {
       });
     }
 
-    res.status(400).json({
-      message: err.message || "Signup failed",
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      name: name.trim(),
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: passwordHash,
+      age,
+      photoURL,
+      About,
     });
+
+    const token = user.getJWT();
+    res.cookie("token", token, cookieOptions);
+
+    // FIX: user.toJSON() (defined on the schema) now strips password/OTP
+    // fields automatically — no hash goes over the wire.
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      user,
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0];
+      return res.status(400).json({
+        message:
+          field === "email" ? "User already exists. Please login." : "Username already exists",
+      });
+    }
+    res.status(400).json({ message: err.message || "Signup failed" });
   }
 });
 
-authRouter.post("/login", async (req, res) => {
+authRouter.post("/login", otpLimiter, async (req, res) => {
   try {
-    console.log("Login started");
-
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
+      return res.status(400).json({ success: false, message: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    // FIX: password now has `select: false` on the schema, so it must be
+    // explicitly requested here — this also makes it obvious, at the call
+    // site, exactly which routes touch the password hash.
+    const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
 
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+    if (!user || !user.password) {
+      return res.status(400).json({ success: false, message: "Invalid email or password" });
     }
 
     const isPasswordValid = await user.validatePassword(password);
-
     if (!isPasswordValid) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return res.status(400).json({ success: false, message: "Invalid email or password" });
     }
 
-    console.log("Password verified");
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
+    const otp = generateOtp();
     user.loginOtp = otp;
-    user.loginOtpExpires = Date.now() + 5 * 60 * 1000;
-
+    user.loginOtpExpires = Date.now() + OTP_TTL_MS;
     await user.save();
+
     await sendEmail({
       to: user.email,
       subject: "TripAdda Login Verification Code",
-      text: `Hi,
-
-Your TripAdda verification code is:
-
-${otp}
-
-This OTP is valid for 5 minutes.
-
-If you didn't request this login, you can safely ignore this email.
-
-- Team TripAdda`,
+      text: `Hi,\n\nYour TripAdda verification code is:\n\n${otp}\n\nThis OTP is valid for 5 minutes.\n\nIf you didn't request this login, you can safely ignore this email.\n\n- Team TripAdda`,
     });
-
-    console.log("Email sent");
-
-    console.log("OTP generated:", otp);
 
     return res.status(200).json({
       success: true,
       message: "OTP generated successfully",
       email: user.email,
-      
     });
   } catch (err) {
-    console.error("Login error:", err);
-
-    return res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: err.message,
-    });
+    console.error("Login error:", err.message);
+    return res.status(500).json({ success: false, message: "Login failed" });
   }
 });
-authRouter.post("/verify-login-otp", async (req, res) => {
+
+authRouter.post("/verify-login-otp", otpLimiter, async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     if (!email || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and OTP are required",
-      });
+      return res.status(400).json({ success: false, message: "Email and OTP are required" });
     }
 
     const user = await User.findOne({
@@ -253,133 +186,80 @@ authRouter.post("/verify-login-otp", async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP",
-      });
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
     }
 
     user.loginOtp = undefined;
     user.loginOtpExpires = undefined;
-
     await user.save();
 
-    const token = await user.getJWT();
-
+    const token = user.getJWT();
     res.cookie("token", token, cookieOptions);
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      user,
-    });
+    return res.status(200).json({ success: true, message: "Login successful", user });
   } catch (err) {
-    console.error("OTP verify error:", err);
-
-    return res.status(500).json({
-      success: false,
-      message: "OTP verification failed",
-      error: err.message,
-    });
+    console.error("OTP verify error:", err.message);
+    return res.status(500).json({ success: false, message: "OTP verification failed" });
   }
 });
-authRouter.post("/verify-reset-otp", async (req, res) => {
+
+authRouter.post("/verify-reset-otp", otpLimiter, async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
+      email: (email || "").toLowerCase().trim(),
       resetOtp: otp,
       resetOtpExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP",
-      });
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
     }
 
-    return res.json({
-      success: true,
-      message: "OTP verified",
-    });
+    return res.json({ success: true, message: "OTP verified" });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
-authRouter.post("/forgot-password", async (req, res) => {
+
+authRouter.post("/forgot-password", otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
-
-    const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-    });
+    const user = await User.findOne({ email: (email || "").toLowerCase().trim() });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
+    const otp = generateOtp();
     user.resetOtp = otp;
-    user.resetOtpExpires = Date.now() + 5 * 60 * 1000;
-
+    user.resetOtpExpires = Date.now() + OTP_TTL_MS;
     await user.save();
 
     await sendEmail({
       to: user.email,
       subject: "Reset Password OTP",
-      text: `
-Hi,
-
-Your TripAdda password reset OTP is
-
-${otp}
-
-This OTP will expire in 5 minutes.
-
-If you didn't request this, simply ignore this email.
-
-- Team TripAdda
-`,
+      text: `Hi,\n\nYour TripAdda password reset OTP is\n\n${otp}\n\nThis OTP will expire in 5 minutes.\n\nIf you didn't request this, simply ignore this email.\n\n- Team TripAdda`,
     });
 
-    res.json({
-      success: true,
-      message: "OTP Sent",
-      email: user.email,
-    });
+    res.json({ success: true, message: "OTP Sent", email: user.email });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
-authRouter.post("/resend-login-otp", async (req, res) => {
+
+authRouter.post("/resend-login-otp", otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
-
-    const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-    });
+    const user = await User.findOne({ email: (email || "").toLowerCase().trim() });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
+    const otp = generateOtp();
     user.loginOtp = otp;
-    user.loginOtpExpires = Date.now() + 5 * 60 * 1000;
-
+    user.loginOtpExpires = Date.now() + OTP_TTL_MS;
     await user.save();
 
     await sendEmail({
@@ -388,105 +268,60 @@ authRouter.post("/resend-login-otp", async (req, res) => {
       text: `Your OTP is ${otp}`,
     });
 
-    res.json({
-      success: true,
-      message: "OTP Sent",
-    });
+    res.json({ success: true, message: "OTP Sent" });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
-authRouter.post("/reset-password", async (req, res) => {
+authRouter.post("/reset-password", otpLimiter, async (req, res) => {
   try {
     const { email, otp, password } = req.body;
 
+    // FIX: email wasn't normalized here (unlike every other route),
+    // so a reset would silently fail for "User@Example.com".
     const user = await User.findOne({
-      email,
+      email: (email || "").toLowerCase().trim(),
       resetOtp: otp,
-      resetOtpExpires: {
-        $gt: Date.now(),
-      },
+      resetOtpExpires: { $gt: Date.now() },
     });
 
     if (!user) {
-      return res.status(400).json({
-        message: "Invalid OTP",
-      });
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    const hash = await bcrypt.hash(password, 10);
-
-    user.password = hash;
-
+    user.password = await bcrypt.hash(password, 10);
     user.resetOtp = undefined;
     user.resetOtpExpires = undefined;
-
     await user.save();
 
-    res.json({
-      success: true,
-      message: "Password Updated",
-    });
+    res.json({ success: true, message: "Password Updated" });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
 authRouter.post("/logout", (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    path: "/",
-  });
-
-  res.clearCookie("connect.sid", {
-    secure: true,
-    sameSite: "none",
-    path: "/",
-  });
-
-  return res.status(200).json({
-    success: true,
-    message: "Logout successfully",
-  });
+  res.clearCookie("token", { httpOnly: true, secure: true, sameSite: "none", path: "/" });
+  return res.status(200).json({ success: true, message: "Logout successfully" });
 });
 
 authRouter.get("/users/profile/view", authMiddleware, async (req, res) => {
-  try {
-    res.setHeader("Cache-Control", "no-store");
-
-    const user = req.user;
-
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    res.status(200).json(user);
-  } catch (err) {
-    res.status(400).send("ERROR:" + err.message);
-  }
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).json(req.user);
 });
+
 authRouter.get("/users/profile/:id", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
       "name username photoURL About createdAt",
     );
-
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
-
     res.status(200).json(user);
   } catch (err) {
-    res.status(400).send("ERROR:" + err.message);
+    res.status(400).json({ message: err.message });
   }
 });
 
