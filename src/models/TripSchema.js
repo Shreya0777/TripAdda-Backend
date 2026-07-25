@@ -2,14 +2,12 @@ const mongoose = require("mongoose");
 
 const TripSchema = new mongoose.Schema(
   {
-    // 👤 User
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
 
-    // 📝 Basic Info
     title: {
       type: String,
       required: true,
@@ -23,33 +21,18 @@ const TripSchema = new mongoose.Schema(
       maxlength: 3000,
     },
 
-    // 📍 Destination Info
     destination: {
-      city: {
-        type: String,
-        required: true,
-        trim: true,
-      },
-
-      state: {
-        type: String,
-        trim: true,
-      },
-
-      country: {
-        type: String,
-        default: "India",
-      },
+      city: { type: String, required: true, trim: true },
+      state: { type: String, trim: true },
+      country: { type: String, default: "India" },
     },
 
-    // 🚏 Boarding Point
     boardingPoint: {
       type: String,
       required: true,
       trim: true,
     },
 
-    // 📅 Trip Details
     duration: {
       type: Number,
       required: true,
@@ -62,240 +45,116 @@ const TripSchema = new mongoose.Schema(
       default: "friends",
     },
 
-    bestTimeToVisit: {
-      type: String,
-    },
+    bestTimeToVisit: { type: String },
 
-    // 🚗 Transport Section
     transportInfo: {
       mode: {
         type: String,
         enum: ["train", "flight", "bus", "car", "bike", "other"],
       },
-
-      transportName: {
-        type: String,
-      },
-
-      route: {
-        type: String,
-      },
-
-      duration: {
-        type: String,
-      },
-
-      fare: {
-        type: Number,
-      },
-
+      transportName: { type: String },
+      route: { type: String },
+      duration: { type: String },
+      fare: { type: Number },
       tips: [String],
     },
 
-    // 💰 Budget Section
     budgetDetails: {
-      totalBudget: {
-        type: Number,
-        required: true,
-      },
-
-      costPerPerson: {
-        type: Number,
-        required: true,
-      },
-
-      stayCost: {
-        type: Number,
-        default: 0,
-      },
-
-      foodCost: {
-        type: Number,
-        default: 0,
-      },
-
-      transportCost: {
-        type: Number,
-        default: 0,
-      },
-
-      sightseeingCost: {
-        type: Number,
-        default: 0,
-      },
-
-      otherCost: {
-        type: Number,
-        default: 0,
-      },
+      totalBudget: { type: Number, required: true },
+      costPerPerson: { type: Number, required: true },
+      stayCost: { type: Number, default: 0 },
+      foodCost: { type: Number, default: 0 },
+      transportCost: { type: Number, default: 0 },
+      sightseeingCost: { type: Number, default: 0 },
+      otherCost: { type: Number, default: 0 },
     },
 
-    // 🏨 Stay Details
     stayDetails: {
-      hotelName: {
-        type: String,
-      },
-
-      location: {
-        type: String,
-      },
-
-      pricePerNight: {
-        type: Number,
-      },
-
+      hotelName: { type: String },
+      location: { type: String },
+      pricePerNight: { type: Number },
       stayType: {
         type: String,
         enum: ["hotel", "hostel", "homestay", "resort", "airbnb"],
       },
-
-      rating: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      stayReview: {
-        type: String,
-      },
-
-      worthIt: {
-        type: Boolean,
-        default: true,
-      },
+      rating: { type: Number, min: 1, max: 5 },
+      stayReview: { type: String },
+      worthIt: { type: Boolean, default: true },
     },
 
-    // 🍜 Food Recommendations
     foodRecommendations: {
       mustTryFoods: [String],
-
       cafes: [String],
-
       budgetFoodOptions: [String],
     },
 
-    // 🌄 Hidden Spots
     hiddenSpots: [
       {
         title: String,
-
         description: String,
-
         image: String,
       },
     ],
 
-    // 🗓 Itinerary
     itinerary: {
+      // FIX: added "photos" — a day-by-day photo + caption journal, as an
+      // alternative to writing a text itinerary from memory after the trip.
       itineraryType: {
         type: String,
-        enum: ["text", "video"],
+        enum: ["text", "video", "photos"],
         default: "text",
       },
 
-      videoUrl: {
-        type: String,
-      },
+      videoUrl: { type: String },
+
+      // FIX: the original text-mode itinerary ("Day Wise Itinerary"
+      // textarea) had nowhere to actually land — the backend only ever
+      // read a structured `itineraryDays` array that the frontend never
+      // sent, so that field silently vanished on every submission. This
+      // gives plain-text mode an explicit home, separate from the
+      // structured per-day photo-journal entries below.
+      rawText: { type: String },
 
       days: [
         {
           day: Number,
-
           title: String,
-
           description: String,
+          // FIX: added so a "photos" itinerary can attach one image per
+          // day-log entry, captured whenever the traveler logs that day.
+          image: String,
         },
       ],
     },
 
-    // 💡 Traveler Tips
     travelerTips: [String],
 
-    // ⭐ Ratings
     ratings: {
-      overall: {
-        type: Number,
-        min: 1,
-        max: 5,
-        required: true,
-      },
-
-      budget: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      safety: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      food: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      stay: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      transport: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
-
-      experience: {
-        type: Number,
-        min: 1,
-        max: 5,
-      },
+      overall: { type: Number, min: 1, max: 5, required: true },
+      budget: { type: Number, min: 1, max: 5 },
+      safety: { type: Number, min: 1, max: 5 },
+      food: { type: Number, min: 1, max: 5 },
+      stay: { type: Number, min: 1, max: 5 },
+      transport: { type: Number, min: 1, max: 5 },
+      experience: { type: Number, min: 1, max: 5 },
     },
 
-    // 🏷 Tags
-    tags: [
-      {
-        type: String,
-        lowercase: true,
-        trim: true,
-      },
-    ],
+    tags: [{ type: String, lowercase: true, trim: true }],
 
-    // 🖼 Media
     media: [
       {
-        url: {
-          type: String,
-          required: true,
-        },
-
-        type: {
-          type: String,
-          enum: ["image", "video"],
-          default: "image",
-        },
+        url: { type: String, required: true },
+        type: { type: String, enum: ["image", "video"], default: "image" },
       },
     ],
   },
-
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// ⚡ INDEXES
-
 TripSchema.index({ userId: 1, createdAt: -1 });
-
 TripSchema.index({ "destination.city": 1 });
-
 TripSchema.index({ tags: 1 });
-
 TripSchema.index({ "ratings.overall": -1 });
-
 TripSchema.index({ "budgetDetails.totalBudget": 1 });
 
 module.exports = mongoose.model("Trip", TripSchema);
