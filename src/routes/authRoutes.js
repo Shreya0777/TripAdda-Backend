@@ -51,7 +51,13 @@ authRouter.get(
   "/auth/google/callback",
   passport.authenticate("google", {
     session: false,
-    failureRedirect: `${FRONTEND_URL}/login`,
+    // FIX: this pointed to `${FRONTEND_URL}/login` — but this app has no
+    // /login route at all (auth happens in a modal, not a page), so any
+    // Google auth failure landed on a real "Page Not Found." Redirecting
+    // to the root with a query flag at least lands somewhere real; the
+    // frontend can optionally read `authError` to show a toast/open the
+    // login modal automatically.
+    failureRedirect: `${FRONTEND_URL}/?authError=google`,
   }),
   async (req, res) => {
     const token = req.user.getJWT();
