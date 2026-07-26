@@ -49,16 +49,23 @@ authRouter.get(
 
 authRouter.get(
   "/auth/google/callback",
-  passport.authenticate("google", {
-    session: false,
-    // FIX: this pointed to `${FRONTEND_URL}/login` — but this app has no
-    // /login route at all (auth happens in a modal, not a page), so any
-    // Google auth failure landed on a real "Page Not Found." Redirecting
-    // to the root with a query flag at least lands somewhere real; the
-    // frontend can optionally read `authError` to show a toast/open the
-    // login modal automatically.
-    failureRedirect: `${FRONTEND_URL}/?authError=google`,
-  }),
+  // FIX: passport.authenticate's built-in failureRedirect handles a
+  // failed Google login by redirecting immediately — silently, with no
+  // log of *why* it failed. That made this completely undiagnosable
+  // from the server logs. Using the callback form instead lets us log
+  // the actual err/info Passport received before redirecting, so the
+  // real reason (bad client secret, redirect URI mismatch, etc.) shows
+  // up in Render's logs the next time this happens.
+  (req, res, next) => {
+    passport.authenticate("google", { session: false }, (err, user, info) => {
+      if (err || !user) {
+        console.error("Google auth failed:", err || info);
+        return res.redirect(`${FRONTEND_URL}/?authError=google`);
+      }
+      req.user = user;
+      next();
+    })(req, res, next);
+  },
   async (req, res) => {
     const token = req.user.getJWT();
     res.cookie("token", token, cookieOptions);
