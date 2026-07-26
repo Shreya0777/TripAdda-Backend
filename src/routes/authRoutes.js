@@ -69,7 +69,18 @@ authRouter.get(
   async (req, res) => {
     const token = req.user.getJWT();
     res.cookie("token", token, cookieOptions);
-    res.redirect(`${FRONTEND_URL}/auth/success`);
+    // FIX: relying only on the cookie here doesn't work reliably —
+    // this cookie is set by tripadda-backend.onrender.com right before
+    // redirecting to trip-adda-frontend.vercel.app, a different domain.
+    // Browsers increasingly block or drop this kind of cross-site
+    // cookie (Safari has for years via ITP; Chrome is moving the same
+    // direction), so the very next request from the frontend can come
+    // back with no valid cookie at all — exactly the 401 seen here.
+    // Passing the token in the redirect URL too gives the frontend a
+    // reliable fallback: read it, send it explicitly as an
+    // Authorization header (which authMiddleware already accepts)
+    // instead of depending on the cookie surviving the cross-site hop.
+    res.redirect(`${FRONTEND_URL}/auth/success?token=${token}`);
   },
 );
 
