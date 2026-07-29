@@ -122,7 +122,7 @@ TripRoutes.post(
 
     const userId = req.user.id;
 
-    if (!title || !description || !city || !boardingPoint || !duration || !totalBudget || !costPerPerson || !overallRating) {
+    if (!title || !description  || !boardingPoint || !duration || !totalBudget || !costPerPerson || !overallRating) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
