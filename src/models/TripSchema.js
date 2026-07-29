@@ -21,11 +21,11 @@ const TripSchema = new mongoose.Schema(
       maxlength: 3000,
     },
 
-    destination: {
-      city: { type: String, required: true, trim: true },
-      state: { type: String, trim: true },
-      country: { type: String, default: "India" },
-    },
+    // destination: {
+    //   city: { type: String, required: true, trim: true },
+    //   state: { type: String, trim: true },
+    //   country: { type: String, default: "India" },
+    // },
 
     boardingPoint: {
       type: String,
