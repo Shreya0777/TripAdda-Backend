@@ -125,7 +125,9 @@ TripRoutes.post(
     if (!title || !description  || !boardingPoint || !duration || !totalBudget || !costPerPerson || !overallRating) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-
+    if(description.trim().length <50){
+      return res.status(400).json({message:"Description must be at least 50 characters"})
+    }
     if (transportMode && !VALID_TRANSPORTS.includes(transportMode)) {
       return res.status(400).json({ message: "Invalid transport mode" });
     }
@@ -157,7 +159,7 @@ TripRoutes.post(
       },
       budgetDetails: {
         totalBudget,
-        costPerPerson,
+        // costPerPerson,
         stayCost: stayCost || 0,
         foodCost: foodCost || 0,
         transportCost: transportCost || 0,

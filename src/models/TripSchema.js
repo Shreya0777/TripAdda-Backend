@@ -19,6 +19,7 @@ const TripSchema = new mongoose.Schema(
       type: String,
       required: true,
       maxlength: 3000,
+      minlength:50,
     },
 
     // destination: {
@@ -61,7 +62,7 @@ const TripSchema = new mongoose.Schema(
 
     budgetDetails: {
       totalBudget: { type: Number, required: true },
-      costPerPerson: { type: Number, required: true },
+      // costPerPerson: { type: Number, required: true },
       stayCost: { type: Number, default: 0 },
       foodCost: { type: Number, default: 0 },
       transportCost: { type: Number, default: 0 },
